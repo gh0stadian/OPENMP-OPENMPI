@@ -49,9 +49,9 @@ void saveImage(double *result, int height, int width, const char *filename) {
     imageFile.write(filename);
 }
 
-void applyFilter(double *image, int image_width, double *filter, int filter_dimension_size, int start_y,
-                 int end_y, double *test, int threads) {
-    int height = end_y;
+void applyFilter(double * image, int image_width, double *filter, int filter_dimension_size,
+                 int image_height, double * output, int threads) {
+    int height = image_height;
     int newImageHeight = height - filter_dimension_size + 1;
     int newImageWidth = image_width - filter_dimension_size + 1;
     int i, j, h, w;
@@ -59,19 +59,19 @@ void applyFilter(double *image, int image_width, double *filter, int filter_dime
 #pragma omp parallel for default (none) \
     num_threads(threads) \
     private ( h, w, j, i) \
-    shared(newImageWidth, newImageHeight, filter_dimension_size, filter, image, start_y, test, image_width)
-    for (i = start_y; i < newImageHeight; i++) {
+    shared(newImageWidth, newImageHeight, filter_dimension_size, filter, image, output, image_width)
+    for (i = 0; i < newImageHeight; i++) {
         for (j = 0; j < newImageWidth; j++) {
             for (h = i; h < i + filter_dimension_size; h++) {
                 for (w = j; w < j + filter_dimension_size; w++) {
-                    test[((i - start_y) * newImageWidth * 3) + (j * 3)] +=
+                    output[((i) * newImageWidth * 3) + (j * 3)] +=
                             filter[((h - i) * filter_dimension_size) + w - j] * image[(h * image_width * 3) + (w * 3)];
 
-                    test[((i - start_y) * newImageWidth * 3) + (j * 3) + 1] +=
+                    output[((i) * newImageWidth * 3) + (j * 3) + 1] +=
                             filter[((h - i) * filter_dimension_size) + w - j] *
                             image[(h * image_width * 3) + (w * 3) + 1];
 
-                    test[((i - start_y) * newImageWidth * 3) + (j * 3) + 2] +=
+                    output[((i) * newImageWidth * 3) + (j * 3) + 2] +=
                             filter[((h - i) * filter_dimension_size) + w - j] *
                             image[(h * image_width * 3) + (w * 3) + 2];
                 }
@@ -86,17 +86,14 @@ int main(int argc, char *argv[]) {
     int rank, nProcesses, image_width, image_height;
     double *filter = static_cast<double *>(calloc(filter_size * filter_size, sizeof(double)));
     double *result;
-
+    double *image;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nProcesses);
+    int * image_index = static_cast<int *>(calloc(nProcesses, sizeof(int)));
+    int * image_lenght = static_cast<int *>(calloc(nProcesses, sizeof(int)));
 
 //    Image image = loadImage("test.png");
-    double *image = loadImage("test.png", &image_width, &image_height);
-    int chunk_y = (image_height - filter_size + 1) / nProcesses;
-    double *output_chunk = static_cast<double *>(
-            calloc(chunk_y * (image_width - filter_size + 1) * 3, sizeof(double)));
-
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     if (rank == 0) {
@@ -105,19 +102,33 @@ int main(int argc, char *argv[]) {
                   "\nThread count => " << threads <<
                   "\nFilter size => " << filter_size << "x" << filter_size;
         std::cout << "\n----------------WORK TIME----------------\n";
+        getGaussian(filter_size, filter_size, 10.0, filter);
+        image = loadImage("test.png", &image_width, &image_height);
+        int chunk_y = (image_height - filter_size + 1) / nProcesses;
         result = static_cast<double *>(calloc(chunk_y * (image_width - filter_size + 1) * 3 * nProcesses,
                                               sizeof(double)));
-        getGaussian(filter_size, filter_size, 10.0, filter);
+        for (int i = 0; i < nProcesses; ++i){
+            image_index[i] = i*chunk_y*image_width*3;
+            image_lenght[i] = (chunk_y+filter_size-1) * image_width * 3;
+        }
     }
 
+    MPI_Bcast(&image_width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&image_height, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(filter, filter_size * filter_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    int chunk_y = (image_height - filter_size + 1) / nProcesses;
+    double * output_chunk = static_cast<double *>(
+            calloc(chunk_y * (image_width - filter_size + 1) * 3, sizeof(double)));
+    int input_size = (chunk_y+filter_size-1) * image_width * 3;
+    double * input = static_cast<double *>(calloc(input_size, sizeof(double)));
 
-    applyFilter(image,
+    MPI_Scatterv(image, image_lenght, image_index, MPI_DOUBLE, input,input_size, MPI_DOUBLE,0, MPI_COMM_WORLD);
+
+    applyFilter(input,
                 image_width,
                 filter,
                 filter_size,
-                (chunk_y * rank),
-                (chunk_y * rank) + chunk_y + filter_size - 1,
+                chunk_y + filter_size - 1,
                 output_chunk,
                 threads);
 
