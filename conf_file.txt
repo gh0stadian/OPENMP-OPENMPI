@@ -1,0 +1,4 @@
+n_of_threads
+4
+filter_size
+5

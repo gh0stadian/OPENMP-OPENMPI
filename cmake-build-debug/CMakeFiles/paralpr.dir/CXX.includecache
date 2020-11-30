@@ -1,0 +1,26 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/gh0stadian/CLionProjects/paralpr/main.cpp
+iostream
+-
+vector
+-
+cmath
+-
+png++/png.hpp
+-
+chrono
+-
+openmpi/mpi.h
+-
+stdlib.h
+-
+algorithm
+-
+

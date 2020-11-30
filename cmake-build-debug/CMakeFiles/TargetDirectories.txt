@@ -1,0 +1,3 @@
+/home/gh0stadian/CLionProjects/paralpr/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/gh0stadian/CLionProjects/paralpr/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/gh0stadian/CLionProjects/paralpr/cmake-build-debug/CMakeFiles/paralpr.dir
